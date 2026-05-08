@@ -7,6 +7,11 @@ import {
 } from 'react-native-vision-camera';
 import { useRouter } from 'expo-router';
 
+import {
+  ensureCameraPermissions,
+  getCameraPermissionStatus,
+} from '@/services/camera/camera-permissions';
+
 type Position = 'front' | 'back';
 type Lens = 'normal' | 'wide';
 
@@ -54,33 +59,24 @@ export default function CameraScreen() {
     setLens((prev) => (prev === 'normal' ? 'wide' : 'normal'));
   }, [isRecording]);
 
-  const checkAndRequestPermissions = useCallback(async () => {
-    let camStatus = Camera.getCameraPermissionStatus();
-    let micStatus = Camera.getMicrophonePermissionStatus();
-
-    if (camStatus === 'not-determined') {
-      camStatus = await Camera.requestCameraPermission();
-    }
-    if (micStatus === 'not-determined') {
-      micStatus = await Camera.requestMicrophonePermission();
-    }
-
-    setHasPermission(camStatus === 'granted' && micStatus === 'granted');
+  const requestPermissions = useCallback(async () => {
+    const result = await ensureCameraPermissions();
+    setHasPermission(result.granted);
   }, []);
 
   useEffect(() => {
-    checkAndRequestPermissions();
-  }, [checkAndRequestPermissions]);
+    requestPermissions();
+  }, [requestPermissions]);
 
-  // 설정에서 돌아왔을 때 권한 재확인
+  // 설정에서 돌아왔을 때 권한 재확인 (팝업 없이 상태만 조회)
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        checkAndRequestPermissions();
+        setHasPermission(getCameraPermissionStatus().granted);
       }
     });
     return () => sub.remove();
-  }, [checkAndRequestPermissions]);
+  }, []);
 
   const startRecording = useCallback(() => {
     if (!cameraRef.current) return;
@@ -106,11 +102,13 @@ export default function CameraScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.text}>카메라/마이크 권한이 필요합니다</Text>
+        <TouchableOpacity style={styles.button} onPress={requestPermissions}>
+          <Text style={styles.buttonText}>다시 요청</Text>
+        </TouchableOpacity>
+        <View style={{ height: 12 }} />
         <TouchableOpacity
-          style={styles.button}
-          onPress={() => {
-            Linking.openSettings();
-          }}>
+          style={[styles.button, { backgroundColor: '#c63' }]}
+          onPress={() => Linking.openSettings()}>
           <Text style={styles.buttonText}>설정에서 권한 허용</Text>
         </TouchableOpacity>
       </View>
